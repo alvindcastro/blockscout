@@ -174,6 +174,44 @@ func TestLeadBlock_hasFields(t *testing.T) {
 	}
 }
 
+// ── leadBlock contact line ────────────────────────────────────────────────────
+
+func TestLeadBlock_contactLine_both(t *testing.T) {
+	l := sampleLead
+	l.Contractor = "Safara Cladding Inc (416)875-1770"
+	l.Applicant = "Studio Senbel Architecture Inc (604)605-6995"
+	block := leadBlock(l)
+	content, _ := block["text"].(map[string]any)["text"].(string)
+	for _, want := range []string{"📞", l.Contractor, l.Applicant} {
+		if !strings.Contains(content, want) {
+			t.Errorf("leadBlock missing %q in contact line\ngot: %s", want, content)
+		}
+	}
+}
+
+func TestLeadBlock_contactLine_contractorOnly(t *testing.T) {
+	l := sampleLead
+	l.Contractor = "BuildRight Contracting (604)555-0199"
+	l.Applicant = ""
+	block := leadBlock(l)
+	content, _ := block["text"].(map[string]any)["text"].(string)
+	if !strings.Contains(content, l.Contractor) {
+		t.Errorf("leadBlock missing contractor %q\ngot: %s", l.Contractor, content)
+	}
+	if !strings.Contains(content, "📞") {
+		t.Errorf("leadBlock missing 📞 when contractor is set\ngot: %s", content)
+	}
+}
+
+func TestLeadBlock_noContactLine_whenEmpty(t *testing.T) {
+	// sampleLead has no Applicant or Contractor set
+	block := leadBlock(sampleLead)
+	content, _ := block["text"].(map[string]any)["text"].(string)
+	if strings.Contains(content, "📞") {
+		t.Errorf("leadBlock should not show 📞 when both Contractor and Applicant are empty\ngot: %s", content)
+	}
+}
+
 // ── headerBlock ───────────────────────────────────────────────────────────────
 
 func TestHeaderBlock_singular(t *testing.T) {
