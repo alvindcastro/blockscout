@@ -1,18 +1,19 @@
 package collector
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/ledongthuc/pdf"
 )
 
 const (
@@ -40,6 +41,10 @@ var issueDateRe = regexp.MustCompile(`^\d{4}/\d{2}/\d{2}$`)
 // valueRe matches dollar amounts like $300,000.00
 var valueRe = regexp.MustCompile(`^\$[\d,]+\.?\d*$`)
 
+// folderSuffixRe matches the trailing type code of a Richmond folder number (e.g. "B7").
+// pdftotext sometimes wraps the folder number across two lines; this code appears alone on the second line.
+var folderSuffixRe = regexp.MustCompile(`^[A-Z]\d+$`)
+
 // permitRecord holds the raw fields extracted from one permit entry in a Richmond PDF report.
 // The PDF renders each field on its own line in reading order, so records are parsed
 // positionally: folder number → work proposed → status → date → value → address → applicant → contractor.
@@ -59,7 +64,8 @@ type permitRecord struct {
 // Richmond has no open data API — data is only available as PDFs at:
 // https://www.richmond.ca/business-development/building-approvals/reports/weeklyreports.htm
 type RichmondCollector struct {
-	client *http.Client
+	client  *http.Client
+	Verbose bool // when true, logs intermediate step counts to stderr
 }
 
 // NewRichmondCollector returns a RichmondCollector with a 30-second HTTP timeout.
@@ -85,6 +91,10 @@ func (r *RichmondCollector) Collect(ctx context.Context) ([]RawProject, error) {
 	}
 
 	// Always process only the most recent report (first link = latest week).
+	if r.Verbose {
+		log.Printf("[richmond] found %d PDF URLs, using: %s", len(urls), urls[0])
+	}
+
 	path, cleanup, err := r.downloadPDF(ctx, urls[0])
 	if err != nil {
 		return nil, err
@@ -96,6 +106,17 @@ func (r *RichmondCollector) Collect(ctx context.Context) ([]RawProject, error) {
 		return nil, err
 	}
 
+	if r.Verbose {
+		log.Printf("[richmond] parsed %d raw permit records from PDF", len(records))
+		counts := make(map[string]int)
+		for _, rec := range records {
+			counts[rec.SubType]++
+		}
+		for subType, n := range counts {
+			log.Printf("[richmond]   sub-type %-30q  %d permits", subType, n)
+		}
+	}
+
 	var projects []RawProject
 	for _, rec := range records {
 		if !isRelevant(rec) {
@@ -105,6 +126,11 @@ func (r *RichmondCollector) Collect(ctx context.Context) ([]RawProject, error) {
 		p.Hash = hashPermit(rec.FolderNumber, rec.Address, rec.IssueDate)
 		projects = append(projects, p)
 	}
+
+	if r.Verbose {
+		log.Printf("[richmond] %d permits passed filter (commercial + value > $500K)", len(projects))
+	}
+
 	return projects, nil
 }
 
@@ -182,40 +208,43 @@ func (r *RichmondCollector) downloadPDF(ctx context.Context, url string) (path s
 	return tmp.Name(), func() { os.Remove(tmp.Name()) }, nil
 }
 
-// parsePDF opens a PDF file and extracts all permit records from its text content.
-// Each page is read row by row; each row's text fragments are joined into one line.
-// Records are then parsed from the flat line list by parsePermitLines.
+// parsePDF extracts all permit records from a Richmond PDF report.
+// It shells out to pdftotext (Poppler), which correctly handles Richmond's PDF font encoding.
+// The plain-text output is split into lines and fed to parsePermitLines.
 func parsePDF(path string) ([]permitRecord, error) {
-	f, reader, err := pdf.Open(path)
+	pdftotext, err := findPdftotext()
 	if err != nil {
-		return nil, fmt.Errorf("richmond: open pdf: %w", err)
+		return nil, err
 	}
-	defer f.Close()
+
+	out, err := exec.Command(pdftotext, path, "-").Output()
+	if err != nil {
+		return nil, fmt.Errorf("richmond: pdftotext: %w", err)
+	}
 
 	var lines []string
-	for i := 1; i <= reader.NumPage(); i++ {
-		page := reader.Page(i)
-		if page.V.IsNull() {
-			continue
-		}
-		rows, err := page.GetTextByRow()
-		if err != nil {
-			continue
-		}
-		for _, row := range rows {
-			var parts []string
-			for _, text := range row.Content {
-				if s := strings.TrimSpace(text.S); s != "" {
-					parts = append(parts, s)
-				}
-			}
-			if len(parts) > 0 {
-				lines = append(lines, strings.Join(parts, " "))
-			}
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			lines = append(lines, line)
 		}
 	}
 
 	return parsePermitLines(lines), nil
+}
+
+// findPdftotext returns the path to the pdftotext binary.
+// Checks the location bundled with Git for Windows first, then falls back to PATH.
+func findPdftotext() (string, error) {
+	const gitPath = `C:\Program Files\Git\mingw64\bin\pdftotext.exe`
+	if _, err := os.Stat(gitPath); err == nil {
+		return gitPath, nil
+	}
+	p, err := exec.LookPath("pdftotext")
+	if err != nil {
+		return "", fmt.Errorf("richmond: pdftotext not found — install Poppler or Git for Windows (expected at %s)", gitPath)
+	}
+	return p, nil
 }
 
 // parsePermitLines converts a flat slice of text lines into permit records.
@@ -274,6 +303,13 @@ func parsePermitLines(lines []string) []permitRecord {
 		}
 
 		if current == nil {
+			continue
+		}
+
+		// pdftotext sometimes wraps the trailing type code (e.g. "B7") to its own line.
+		// If no fields have been assigned yet, treat a bare type code as part of the folder number.
+		if fieldIdx == 0 && folderSuffixRe.MatchString(line) {
+			current.FolderNumber = strings.TrimSpace(current.FolderNumber + " " + line)
 			continue
 		}
 
