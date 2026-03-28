@@ -133,12 +133,14 @@ func (r *RichmondCollector) Collect(ctx context.Context) ([]RawProject, error) {
 		}
 	}
 
+	pdfURL := urls[0]
 	var projects []RawProject
 	for _, rec := range records {
 		if !isRelevant(rec, r.MinValue) {
 			continue
 		}
 		p := toRawProject(rec)
+		p.SourceURL = pdfURL
 		p.Hash = hashPermit(rec.FolderNumber, rec.Address, rec.IssueDate)
 		projects = append(projects, p)
 	}

@@ -122,10 +122,15 @@ func leadBlock(l storage.Lead) map[string]any {
 		}
 	}
 
+	sourceLine := ""
+	if l.SourceURL != "" {
+		sourceLine = fmt.Sprintf("\n📄 <%s|View source document>", l.SourceURL)
+	}
+
 	text := fmt.Sprintf("*%s*\t\t\t%s *Score: %d/10*\n"+
 		"📍 %s  |  💰 $%s CAD  |  🏢 GC: %s%s\n"+
 		"🕐 *Outreach:* %s\n"+
-		"📝 %s",
+		"📝 %s%s",
 		l.Title,
 		scoreEmoji(l.PriorityScore), l.PriorityScore,
 		l.Location,
@@ -134,6 +139,7 @@ func leadBlock(l storage.Lead) map[string]any {
 		contactLine,
 		l.SuggestedOutreachTiming,
 		l.Notes,
+		sourceLine,
 	)
 
 	fields := []map[string]any{

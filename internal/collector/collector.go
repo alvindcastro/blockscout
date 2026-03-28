@@ -15,6 +15,7 @@ type RawProject struct {
 	Value       int64          // project value in CAD (dollars)
 	Description string         // raw text description
 	IssuedAt    time.Time      // date from the source (permit issue date, award date, etc.)
+	SourceURL   string         // direct URL to the source document (PDF, page, feed item)
 	RawData     map[string]any // full original payload preserved for audit
 	Hash        string         // sha256 dedup key — set before inserting to DB
 }

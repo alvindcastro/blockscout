@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS leads (
     suggested_outreach_timing TEXT,
     applicant                 TEXT,   -- raw applicant from permit (may include phone)
     contractor                TEXT,   -- raw contractor from permit (may include phone)
+    source_url                TEXT,   -- direct link to the source document (PDF, page, etc.)
     notes                     TEXT,
     status                    TEXT DEFAULT 'new', -- new|contacted|proposal|booked|lost
     created_at                DATETIME NOT NULL,
@@ -81,6 +82,7 @@ func Migrate(db *sql.DB) error {
 	for _, stmt := range []string{
 		`ALTER TABLE leads ADD COLUMN applicant TEXT`,
 		`ALTER TABLE leads ADD COLUMN contractor TEXT`,
+		`ALTER TABLE leads ADD COLUMN source_url TEXT`,
 	} {
 		if _, err := db.Exec(stmt); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
 			return err

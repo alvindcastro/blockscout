@@ -99,6 +99,7 @@ func sendTestSlack(ctx context.Context) {
 			GeneralContractor:       "BuildRight Contracting",
 			Applicant:               "ABC Developments Ltd (604)555-0100",
 			Contractor:              "BuildRight Contracting (604)555-0199",
+			SourceURL:               "https://www.richmond.ca/__shared/assets/buildingreportmarch15_202678649.pdf",
 			ProjectType:             "industrial",
 			EstimatedCrewSize:       80,
 			EstimatedDurationMonths: 6,

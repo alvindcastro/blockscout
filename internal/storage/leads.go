@@ -18,6 +18,7 @@ type Lead struct {
 	GeneralContractor       string
 	Applicant               string // raw applicant from permit (may include phone/contact)
 	Contractor              string // raw contractor from permit (may include phone/contact)
+	SourceURL               string // direct link to the source document (PDF, page, etc.)
 	ProjectType             string
 	EstimatedCrewSize       int
 	EstimatedDurationMonths int
@@ -59,14 +60,14 @@ func (s *sqliteLeadStore) Insert(ctx context.Context, l *Lead) error {
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO leads (
 			id, raw_project_id, source, title, location, project_value,
-			general_contractor, applicant, contractor, project_type,
+			general_contractor, applicant, contractor, source_url, project_type,
 			estimated_crew_size, estimated_duration_months, out_of_town_crew_likely,
 			priority_score, priority_reason, suggested_outreach_timing,
 			notes, status, created_at, updated_at
-		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	`,
 		l.ID, l.RawProjectID, l.Source, l.Title, l.Location, l.ProjectValue,
-		l.GeneralContractor, l.Applicant, l.Contractor, l.ProjectType,
+		l.GeneralContractor, l.Applicant, l.Contractor, l.SourceURL, l.ProjectType,
 		l.EstimatedCrewSize, l.EstimatedDurationMonths, boolToInt(l.OutOfTownCrewLikely),
 		l.PriorityScore, l.PriorityReason, l.SuggestedOutreachTiming,
 		l.Notes, l.Status, now, now,
@@ -77,7 +78,7 @@ func (s *sqliteLeadStore) Insert(ctx context.Context, l *Lead) error {
 func (s *sqliteLeadStore) ListNew(ctx context.Context) ([]Lead, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, raw_project_id, source, title, location, project_value,
-		       general_contractor, applicant, contractor, project_type,
+		       general_contractor, applicant, contractor, source_url, project_type,
 		       estimated_crew_size, estimated_duration_months, out_of_town_crew_likely,
 		       priority_score, priority_reason, suggested_outreach_timing,
 		       notes, status, created_at, updated_at
@@ -96,7 +97,7 @@ func (s *sqliteLeadStore) ListNew(ctx context.Context) ([]Lead, error) {
 		var oot int
 		if err := rows.Scan(
 			&l.ID, &l.RawProjectID, &l.Source, &l.Title, &l.Location, &l.ProjectValue,
-			&l.GeneralContractor, &l.Applicant, &l.Contractor, &l.ProjectType,
+			&l.GeneralContractor, &l.Applicant, &l.Contractor, &l.SourceURL, &l.ProjectType,
 			&l.EstimatedCrewSize, &l.EstimatedDurationMonths, &oot,
 			&l.PriorityScore, &l.PriorityReason, &l.SuggestedOutreachTiming,
 			&l.Notes, &l.Status, &l.CreatedAt, &l.UpdatedAt,

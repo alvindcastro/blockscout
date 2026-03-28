@@ -138,6 +138,7 @@ func toLeadRecord(p collector.RawProject, e *EnrichedLead) storage.Lead {
 		GeneralContractor:       e.GeneralContractor,
 		Applicant:               applicant,
 		Contractor:              contractor,
+		SourceURL:               p.SourceURL,
 		ProjectType:             e.ProjectType,
 		EstimatedCrewSize:       e.EstimatedCrewSize,
 		EstimatedDurationMonths: e.EstimatedDurationMonths,

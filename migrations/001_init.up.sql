@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS leads (
     suggested_outreach_timing TEXT,
     applicant                 TEXT,
     contractor                TEXT,
+    source_url                TEXT,
     notes                     TEXT,
     status                    TEXT DEFAULT 'new',
     created_at                DATETIME NOT NULL,
